@@ -25,7 +25,7 @@ char * serverDir;
 FILE * fich;
 long int bytesFichero;
 int cookieCounter = 0;
-int cookieExpired = 0;
+struct tm * timeCookie;
 
 struct {
 	char *ext;
@@ -126,14 +126,12 @@ char * getExtFichero(char * recurso){
 
 }
 
-struct tm * crearCookie(){
-	time_t rawtime;
-	struct tm * timeInfo2;
-	rawtime = time(NULL);
-	timeInfo2 = localtime(&rawtime);
-	timeInfo2->tm_min +=2;
+void crearCookie(){
+	time_t tiempo;
+	tiempo = time(NULL);
+	timeCookie = localtime(&tiempo);
+	timeCookie->tm_min +=2;
 	cookieCounter = 1;
-	return timeInfo2;
 }
 
 void process_web_request(int descriptorFichero)
@@ -257,7 +255,7 @@ void process_web_request(int descriptorFichero)
 		token = strtok(NULL," ");
 	}
 	
-	printf("La conexion es: %s\n",connection);
+	//printf("La conexion es: %s\n",connection);
 	
 	reti = regcomp(&regex,"^\\/(([a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
 	if( reti ){ 
@@ -266,8 +264,8 @@ void process_web_request(int descriptorFichero)
 	}
 	reti = regexec(&regex,directorio, 0, NULL, 0);  
 	if( reti == 0 ){
-    		puts("Match");                               	    
-		printf("La ruta introducida es válida\n");
+    		//puts("Match");                               	    
+		//printf("La ruta introducida es válida\n");
 	}
 	else if( reti == REG_NOMATCH ){
     		puts("No match");
@@ -331,7 +329,11 @@ void process_web_request(int descriptorFichero)
 		//Caso para tratar la solicitud del resto de ficheros
 		char * recursoSolicitado = strdup(auxToken);
 		extFichero = getExtFichero(auxToken);
-		//printf("La extension del fichero es: %s\n",extFichero);
+		
+		//
+		//	Evaluar el tipo de fichero que se está solicitando, y actuar en
+		//	consecuencia devolviendolo si se soporta u devolviendo el error correspondiente en otro caso
+		//
 		tipoFichero = isSoportado(extFichero);
 		if (tipoFichero == NULL){
 			printf("La extension del fichero solicitado no esta soportada\n");
@@ -356,13 +358,15 @@ void process_web_request(int descriptorFichero)
 		int pos = ftell(fich);
 		time_t rawtime;
 		struct tm * timeInfo;
-		struct tm * timeCookie;
 		rawtime = time(NULL);
 		timeInfo = localtime(&rawtime);
+		//printf("TimeCookie-min: %d\n",timeCookie->tm_min);
+		//printf("TimeInfo-min: %d\n",timeInfo->tm_min);
 		char cabecera[100];
 		char * server = "UbuntuServer/16.04"; 
 		char fechayHora[50];
 		char caducidad[50];
+		int minutos;
 		strftime(fechayHora,50,"%c",timeInfo);
 		//
 		//	En caso de que el fichero sea soportado, exista, etc. se envia el fichero con la cabecera
@@ -371,17 +375,19 @@ void process_web_request(int descriptorFichero)
 		
 		
 		if (strcmp(recurso,"notFound.html") != 0 && strcmp(recurso,"forbidden.html") != 0 && strcmp(recurso,"badRequest.html") != 0){
-			printf("El valor de la cookie es: %d\n",cookieCounter);
+			//printf("El valor de la cookie es: %d\n",cookieCounter);
 			if (cookieCounter == 0){
-				printf("Se crea la cookie\n");
-				timeCookie = crearCookie();
-				printf("timeCookie-min: %d\n",timeCookie->tm_min);
+				//printf("Se crea la cookie\n");
+				crearCookie();
+				//printf("timeCookie-min: %d\n",timeCookie->tm_min);
+				minutos = timeCookie->tm_min;
 				strftime(caducidad,50,"%c",timeCookie);
 			}
-			else if (timeInfo->tm_min >= timeCookie->tm_min){
-				printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,timeCookie->tm_min);
+			else if (timeInfo->tm_min >= minutos){
+				//printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,minutos);
 				printf("La cookie ha expirado\n");
-				timeCookie = crearCookie();
+				crearCookie();
+				minutos = timeCookie->tm_min;
 				strftime(caducidad,50,"%c",timeCookie);
 			}
 			//Se crean las cabeceras de la respuesta
@@ -424,27 +430,7 @@ void process_web_request(int descriptorFichero)
 			peticion = 0;
 		}
 	
-	
-	
-	//
-	// Se eliminan los caracteres de retorno de carro y nueva linea
-	//
-	
-	
-	//
-	//	TRATAR LOS CASOS DE LOS DIFERENTES METODOS QUE SE USAN
-	//	(Se soporta solo GET)
-	//
-		
-	
-	//
-	//	Evaluar el tipo de fichero que se está solicitando, y actuar en
-	//	consecuencia devolviendolo si se soporta u devolviendo el error correspondiente en otro caso
-	//
-	
-	
-		
-		}						
+	}						
 				
 	}
 	if (strcmp(connection,"keep-alive") == 0){
@@ -453,7 +439,7 @@ void process_web_request(int descriptorFichero)
 	}
 	printf("Se ha cerrado la conexion\n");
 	close(descriptorFichero);
-	//exit(1);
+	exit(1);
 }
 
 int main(int argc, char **argv)
@@ -494,9 +480,7 @@ int main(int argc, char **argv)
 
 	(void)signal(SIGCHLD, SIG_IGN); // Ignoramos a los hijos
 	(void)signal(SIGHUP, SIG_IGN); // Ignoramos cuelgues
-	
 	debug(LOG,"web server starting...", argv[1] ,getpid());
-	
 	/* setup the network socket */
 	if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
 		debug(ERROR, "system call","socket",0);
@@ -521,7 +505,6 @@ int main(int argc, char **argv)
 		length = sizeof(cli_addr);
 		if((socketfd = accept(listenfd, (struct sockaddr *)&cli_addr, &length)) < 0)
 			debug(ERROR,"system call","accept",0);
-		
 		if((pid = fork()) < 0) {
 			debug(ERROR,"system call","fork",0);
 		}
