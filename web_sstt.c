@@ -24,8 +24,8 @@
 char * serverDir;
 FILE * fich;
 long int bytesFichero;
-int cookieCounter;
-int firstRequest = 1;
+int cookieCounter = 0;
+int cookieExpired = 0;
 
 struct {
 	char *ext;
@@ -126,6 +126,15 @@ char * getExtFichero(char * recurso){
 
 }
 
+struct tm * crearCookie(){
+	time_t rawtime;
+	struct tm * timeInfo2;
+	rawtime = time(NULL);
+	timeInfo2 = localtime(&rawtime);
+	timeInfo2->tm_min +=2;
+	cookieCounter = 1;
+	return timeInfo2;
+}
 
 void process_web_request(int descriptorFichero)
 {
@@ -179,7 +188,7 @@ void process_web_request(int descriptorFichero)
 	int reti;
 	char msgbuf[100];
 	char * linea;
-	char * lineaGet;
+	char * lineaSolicitud;
 	char * lineaConection;
 	char * token;
 	char * auxToken;
@@ -193,7 +202,7 @@ void process_web_request(int descriptorFichero)
 	//printf("Comprobacion de errores de lectura\n");
 	
 	linea = strtok(requestBuffer,delim);
-	lineaGet = strdup(linea);
+	lineaSolicitud = strdup(linea);
 	//printf("Linea: %s\n",linea);
 	
 	while (linea!=NULL){
@@ -209,8 +218,8 @@ void process_web_request(int descriptorFichero)
 	//printf("Lectura de la linea de solicitud\n");
 	
 	//printf("Linea solicitud: %s\n",lineaGet);
-	token = strtok(lineaGet," ");
-	if (strcmp(token,"GET") == 0){
+	token = strtok(lineaSolicitud," ");
+	if (strcmp(token,"GET") == 0 || strcmp(token,"POST") == 0){
 		//printf("Token: %s\n",token);
 		token = strtok(NULL," ");
 		directorio = token;
@@ -221,7 +230,7 @@ void process_web_request(int descriptorFichero)
 		}	
 	}
 	else{
-		printf("Error: El mensaje de solicitud debe ser un GET\n");
+		printf("Error: El mensaje de solicitud debe ser un GET o un POST\n");
 		isBadRequest = 1;
 	}
 	char * auxDirectorio = strdup(directorio);
@@ -347,6 +356,7 @@ void process_web_request(int descriptorFichero)
 		int pos = ftell(fich);
 		time_t rawtime;
 		struct tm * timeInfo;
+		struct tm * timeCookie;
 		rawtime = time(NULL);
 		timeInfo = localtime(&rawtime);
 		char cabecera[100];
@@ -359,18 +369,21 @@ void process_web_request(int descriptorFichero)
 		//	correspondiente, y el envio del fichero se hace en blockes de un máximo de  8kB
 		//
 		
+		
 		if (strcmp(recurso,"notFound.html") != 0 && strcmp(recurso,"forbidden.html") != 0 && strcmp(recurso,"badRequest.html") != 0){
 			printf("El valor de la cookie es: %d\n",cookieCounter);
-			if (firstRequest){
-				printf("Primera peticion\n");
-				rawtime = time(NULL);
-				timeInfo = localtime(&rawtime);
-				timeInfo->tm_min +=2;
-				strftime(caducidad,50,"%c",timeInfo);
-				cookieCounter = 1;
-				firstRequest = 0;
+			if (cookieCounter == 0){
+				printf("Se crea la cookie\n");
+				timeCookie = crearCookie();
+				printf("timeCookie-min: %d\n",timeCookie->tm_min);
+				strftime(caducidad,50,"%c",timeCookie);
 			}
-			
+			else if (timeInfo->tm_min >= timeCookie->tm_min){
+				printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,timeCookie->tm_min);
+				printf("La cookie ha expirado\n");
+				timeCookie = crearCookie();
+				strftime(caducidad,50,"%c",timeCookie);
+			}
 			//Se crean las cabeceras de la respuesta
 			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter= %d; Expires= %s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,cookieCounter,caducidad);
 			if (cookieCounter < 10){
