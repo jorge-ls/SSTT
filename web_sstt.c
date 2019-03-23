@@ -25,7 +25,8 @@ char * serverDir;
 FILE * fich;
 long int bytesFichero;
 int cookieCounter = 0;
-struct tm * timeCookie;
+struct tm * timeInfo;
+
 
 struct {
 	char *ext;
@@ -82,13 +83,16 @@ char * buscarRecurso(DIR * dir,char * elem){
 	struct dirent * direntp;
 	while ((direntp = readdir(dir)) != NULL){
 		if (strcmp(direntp->d_name,elem) == 0){
-			//printf("Se ha encontrado el recurso %s\n",elem);
 			recurso = direntp->d_name;
 			fich = fopen(direntp->d_name,"r");
+			if (fich == NULL){
+				printf("No se ha podido abrir el fichero.\n");
+				recurso = "forbidden.html";
+				fich = fopen(recurso,"r");
+			}
 			fseek(fich,0L,SEEK_END);
 			if (ftell(fich) == 0){
 				printf("El fichero esta vacio\n");
-				exit(2);
 			}
 			bytesFichero = ftell(fich);
 			closedir(dir);
@@ -126,13 +130,14 @@ char * getExtFichero(char * recurso){
 
 }
 
-void crearCookie(){
-	time_t tiempo;
-	tiempo = time(NULL);
-	timeCookie = localtime(&tiempo);
-	timeCookie->tm_min +=2;
-	cookieCounter = 1;
+//Establece la fecha actual
+void setDate(){
+	time_t rawtime;
+	rawtime = time(NULL);
+	timeInfo = localtime(&rawtime);	
+
 }
+
 
 void process_web_request(int descriptorFichero)
 {
@@ -146,7 +151,12 @@ void process_web_request(int descriptorFichero)
 	struct timeval tv;
 	int retval;
 	int peticion = 1;
+	int valorCookie;
+	int firstRequest;
+	char * lineaCookie;
 	char * connection;
+	int isCookieCreada;
+	char * path = "/";
 	 
 	//Se inicializa el conjunto de sockets de lectura 
 	FD_ZERO(&readfds);
@@ -192,7 +202,7 @@ void process_web_request(int descriptorFichero)
 	char * auxToken;
 	char * directorio;
 	const char delim[] = "**"; 
-	char * recurso = NULL;
+	char * recurso;
 	DIR * dir;
 	int isBadRequest = 0;
 	char * tipoFichero;
@@ -208,6 +218,9 @@ void process_web_request(int descriptorFichero)
 			lineaConection = strdup(linea);
 			//printf("Linea connection: %s\n",lineaConection);
 		}
+		else if (strstr(linea,"Cookie:") != NULL){
+			lineaCookie = strdup(linea);
+		}
 		linea = strtok(NULL,delim);
 		//printf("Linea: %s\n",linea);
 	}
@@ -216,8 +229,21 @@ void process_web_request(int descriptorFichero)
 	//printf("Lectura de la linea de solicitud\n");
 	
 	//printf("Linea solicitud: %s\n",lineaGet);
+	/*int numEspacios = 0;
+	for (int i=0;lineaSolicitud[i] != '\0';i++){
+		if (lineaSolicitud[i] == ' '){
+			printf("¡Espacio blanco!\n");
+			numEspacios++;	
+		}
+	}*/
+	//printf("Num espacios: %d\n",numEspacios);
 	token = strtok(lineaSolicitud," ");
-	if (strcmp(token,"GET") == 0 || strcmp(token,"POST") == 0){
+	/*if (numEspacios != 2){
+		printf("Num espacios incorrectos\n");
+		isBadRequest = 1;
+	}*/
+	
+	else if (strcmp(token,"GET") == 0 || strcmp(token,"POST") == 0){
 		//printf("Token: %s\n",token);
 		token = strtok(NULL," ");
 		directorio = token;
@@ -225,20 +251,24 @@ void process_web_request(int descriptorFichero)
 		token = strtok(NULL," ");
 		if (strcmp(token,"HTTP/1.1") != 0){
 			isBadRequest = 1;
-		}	
+		}
+		char * auxDirectorio = strdup(directorio);
+	
+		token = strtok(auxDirectorio,"/");
+		while (token != NULL){
+			//printf("Token recurso: %s\n",token);
+			auxToken = token;
+			token = strtok(NULL,"/");	
+
+		}
+			
 	}
 	else{
 		printf("Error: El mensaje de solicitud debe ser un GET o un POST\n");
 		isBadRequest = 1;
 	}
-	char * auxDirectorio = strdup(directorio);
-	token = strtok(auxDirectorio,"/");
-	while (token != NULL){
-		//printf("Token recurso: %s\n",token);
-		auxToken = token;
-		token = strtok(NULL,"/");	
-
-	}
+	
+	
 	//printf("El recurso solicitado es %s\n",auxToken);
 
 	//Se comprueba si la conexion es persistente o no
@@ -257,31 +287,35 @@ void process_web_request(int descriptorFichero)
 	
 	//printf("La conexion es: %s\n",connection);
 	
-	reti = regcomp(&regex,"^\\/(([a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
-	if( reti ){ 
-		fprintf(stderr, "Could not compile regex\n"); 
-		exit(1); 
-	}
-	reti = regexec(&regex,directorio, 0, NULL, 0);  
-	if( reti == 0 ){
-    		//puts("Match");                               	    
-		//printf("La ruta introducida es válida\n");
-	}
-	else if( reti == REG_NOMATCH ){
-    		puts("No match");
-		printf("Error:La ruta introducida no es válida\n"); 
-		isBadRequest = 1;                              
-	}
-	else if (reti == REG_BADPAT){
-		puts("Invalid");
-		printf("Error: La expresion regular es invalida\n");
+	if (directorio != NULL){
+		reti = regcomp(&regex,"^\\/(([a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
+		if( reti ){ 
+			fprintf(stderr, "Could not compile regex\n"); 
+			exit(1); 
+		}
+		reti = regexec(&regex,directorio, 0, NULL, 0);  
+		if( reti == 0 ){
+    			//puts("Match");                               	    
+			//printf("La ruta introducida es válida\n");
+		}
+		else if( reti == REG_NOMATCH ){
+    			puts("No match");
+			printf("Error:La ruta introducida no es válida\n"); 
+			isBadRequest = 1;                              
+		}
+		else if (reti == REG_BADPAT){
+			puts("Invalid");
+			printf("Error: La expresion regular es invalida\n");
+
+		}
+		else{                                                   
+    			regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+    			fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+    			exit(1);
+		}
 
 	}
-	else{                                                   
-    		regerror(reti, &regex, msgbuf, sizeof(msgbuf));
-    		fprintf(stderr, "Regex match failed: %s\n", msgbuf);
-    		exit(1);
-	}
+	
 		
 		
 	//
@@ -300,14 +334,20 @@ void process_web_request(int descriptorFichero)
 	//
 	
 	
-	if (strstr(directorio,"..") != NULL){
+	if (isBadRequest){
+		//printf("Entra badRequest\n");
+		recurso = buscarRecurso(dir,"badRequest.html");
+		tipoFichero = "text/html";
+	}
+	else if (strstr(directorio,"..") != NULL){
 		printf("Error: No se tienen permisos para acceder al recurso\n");
-		debug(PROHIBIDO,"403 Forbidden","No se tienen permisos para acceder al recurso solicitado",descriptorFichero);
+		//debug(PROHIBIDO,"403 Forbidden","No se tienen permisos para acceder al recurso solicitado",descriptorFichero);
 		recurso = buscarRecurso(dir,"forbidden.html");
+		printf("Recurso asignado: %s\n",recurso);
 		tipoFichero = "text/html";
 	}
 
-	else if (cookieCounter == 10){
+	else if (valorCookie == 10){
 		printf("Se ha realizado el maximo numero de accesos permitidos\n");
 		recurso = buscarRecurso(dir,"forbidden.html");
 		tipoFichero = "text/html";
@@ -319,13 +359,9 @@ void process_web_request(int descriptorFichero)
 		
 		//printf("El recurso encontrado es: %s\n",recurso);
 	}
-	else if (isBadRequest){
-		//printf("Entra badRequest\n");
-		recurso = buscarRecurso(dir,"badRequest.html");
-		tipoFichero = "text/html";
-	}
+	
 	else {
-		//printf("Entra a buscar fichero\n");
+		printf("Entra a buscar fichero\n");
 		//Caso para tratar la solicitud del resto de ficheros
 		char * recursoSolicitado = strdup(auxToken);
 		extFichero = getExtFichero(auxToken);
@@ -339,6 +375,7 @@ void process_web_request(int descriptorFichero)
 			printf("La extension del fichero solicitado no esta soportada\n");
 		}
 		recurso = buscarRecurso(dir,recursoSolicitado);
+		//printf("El recurso solicitado es: %s\n",recurso);
 		
 	}
 	//
@@ -351,15 +388,15 @@ void process_web_request(int descriptorFichero)
 		printf("No se ha encontrado el recurso solicitado\n");
 		//debug(NOENCONTRADO,"404 Not Found","No se ha encontrado el recurso solicitado",descriptorFichero);
 		recurso = buscarRecurso(dir,"notFound.html");
+		//printf("Recurso asignado: %s\n",recurso);
 		tipoFichero = "text/html";
 	}
 		
 		fseek(fich,0L,SEEK_SET);
 		int pos = ftell(fich);
-		time_t rawtime;
-		struct tm * timeInfo;
-		rawtime = time(NULL);
-		timeInfo = localtime(&rawtime);
+		struct tm * timeCookie;
+		//printf("timeCookie-min: %d\n",timeInfo->tm_min);
+		//clock_t comienzo;
 		//printf("TimeCookie-min: %d\n",timeCookie->tm_min);
 		//printf("TimeInfo-min: %d\n",timeInfo->tm_min);
 		char cabecera[100];
@@ -367,43 +404,90 @@ void process_web_request(int descriptorFichero)
 		char fechayHora[50];
 		char caducidad[50];
 		int minutos;
-		strftime(fechayHora,50,"%c",timeInfo);
+		//int maxAge;
+		time_t tiempo;
+		//time_t comienzo,final;
+		
+		char * stringDate = "Fri Mar 22 22:26:02 2019";
+
 		//
 		//	En caso de que el fichero sea soportado, exista, etc. se envia el fichero con la cabecera
 		//	correspondiente, y el envio del fichero se hace en blockes de un máximo de  8kB
 		//
 		
 		
-		if (strcmp(recurso,"notFound.html") != 0 && strcmp(recurso,"forbidden.html") != 0 && strcmp(recurso,"badRequest.html") != 0){
+		if ((strcmp(recurso,"notFound.html") != 0) && (strcmp(recurso,"forbidden.html") != 0) && (strcmp(recurso,"badRequest.html") != 0)){			
+			setDate();
+			strftime(fechayHora,50,"%c",timeInfo);
+			printf("Entra a devolver 200 OK\n");
+			printf("strcmp(recurso,notFound.html): %d\n",strcmp(recurso,"notFound.html"));
 			//printf("El valor de la cookie es: %d\n",cookieCounter);
-			if (cookieCounter == 0){
-				//printf("Se crea la cookie\n");
-				crearCookie();
-				//printf("timeCookie-min: %d\n",timeCookie->tm_min);
+			if (lineaCookie == NULL){
+				valorCookie = 1;
+				//firstRequest = 1;
+				printf("Se crea la cookie\n");
+				tiempo = time(NULL);
+				timeCookie = localtime(&tiempo);
+				timeCookie->tm_min +=2;
+				//maxAge = 120;
+				isCookieCreada = 1;
+				printf("timeCookie-min: %d\n",timeCookie->tm_min);
 				minutos = timeCookie->tm_min;
 				strftime(caducidad,50,"%c",timeCookie);
+
+			} else {
+				token = strtok(lineaCookie," ");
+				printf("Token cookie: %s\n",token);
+				token = strtok(NULL," ");
+				printf("Token cookie: %s\n",token);
+			
+				token = strtok(token,"=");
+				token = strtok(NULL,"=");
+				printf("Token cookie: %s\n",token);
+				valorCookie = atoi(token);
+				printf("El valor de la cookie es: %d\n",valorCookie);
+				valorCookie++;
 			}
-			else if (timeInfo->tm_min >= minutos){
-				//printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,minutos);
-				printf("La cookie ha expirado\n");
-				crearCookie();
-				minutos = timeCookie->tm_min;
-				strftime(caducidad,50,"%c",timeCookie);
-			}
+			//if (isCookieCreada){
+				if (timeInfo->tm_min >= minutos){
+					printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,minutos);
+					printf("La cookie ha expirado\n");
+					printf("Se crea la cookie\n");
+					//comienzo = time(NULL);
+					tiempo = time(NULL);
+					timeCookie = localtime(&tiempo);
+					timeCookie->tm_min +=2;
+					valorCookie = 1;
+					minutos = timeCookie->tm_min;
+					printf("timeCookie-min: %d\n",timeCookie->tm_min);
+					strftime(caducidad,50,"%c",timeCookie);
+				}
+			//}
+			//long int segundos = time(NULL)-comienzo;
+			//printf("Numero de segundos transcurridos es : %ld\n",segundos);
+			//maxAge -= segundos - (segundos-1);
+			//printf("MaxAge: %d\n",maxAge);
+			//maxAge -= time(NULL);
 			//Se crean las cabeceras de la respuesta
-			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter= %d; Expires= %s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,cookieCounter,caducidad);
-			if (cookieCounter < 10){
+			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter=%d; Expires= %s; Path=%s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,valorCookie,caducidad,path);
+			/*if (cookieCounter < 10){
 				cookieCounter++;
-			}
+			}*/
 		
 		}
 		else if (strcmp(recurso,"notFound.html") == 0){
+			setDate();
+			strftime(fechayHora,50,"%c",timeInfo);
 			sprintf(cabecera,"HTTP/1.1 404 Not Found\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero);
 		}
 		else if (strcmp(recurso,"forbidden.html") == 0){
+			setDate();
+			strftime(fechayHora,50,"%c",timeInfo);
 			sprintf(cabecera,"HTTP/1.1 403 Forbidden\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero);
 		}
 		else if (strcmp(recurso,"badRequest.html") == 0){
+			setDate();
+			strftime(fechayHora,50,"%c",timeInfo);
 			sprintf(cabecera,"HTTP/1.1 400 Bad Request\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero);
 		}
 		int contador = 0;
@@ -414,16 +498,11 @@ void process_web_request(int descriptorFichero)
 		}
 		//printf("El tamaño de la cabecera es: %d\n",contador);
 		int bytesEscritos = write(descriptorFichero,cabecera,contador);
-		//printf("El numero de bytes escritos es: %d\n",bytesEscritos);
-				
+		//printf("El numero de bytes escritos es: %d\n",bytesEscritos);		
 		while (!feof(fich)){
-			//printf("Entra bucle fichero\n");
 			bytesleidos = fread(buffer,1,BUFSIZE,fich);
 			pos = ftell(fich);
-			//printf("La posicion actual en el fichero es: %d\n",pos);
-			//printf("Bytes leidos: %d\n",bytesleidos);
 			bytesEscritos = write(descriptorFichero,buffer,bytesleidos);
-			//printf("El numero de bytes escritos es: %d\n",bytesEscritos);
 		}
 	//}
 		if (strcmp(connection,"close") == 0){
