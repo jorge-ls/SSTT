@@ -151,7 +151,7 @@ void process_web_request(int descriptorFichero)
 	struct timeval tv;
 	int retval;
 	int peticion = 1;
-	int valorCookie;
+	int valorCookie = 0;
 	int firstRequest;
 	char * lineaCookie;
 	char * connection;
@@ -211,6 +211,7 @@ void process_web_request(int descriptorFichero)
 	
 	linea = strtok(requestBuffer,delim);
 	lineaSolicitud = strdup(linea);
+	char * auxLinea = strdup(linea);
 	//printf("Linea: %s\n",linea);
 	
 	while (linea!=NULL){
@@ -226,9 +227,9 @@ void process_web_request(int descriptorFichero)
 	}
 
 	//Lectura de la linea de solicitud
-	//printf("Lectura de la linea de solicitud\n");
 	
-	//printf("Linea solicitud: %s\n",lineaGet);
+	
+	
 	/*int numEspacios = 0;
 	for (int i=0;lineaSolicitud[i] != '\0';i++){
 		if (lineaSolicitud[i] == ' '){
@@ -236,12 +237,22 @@ void process_web_request(int descriptorFichero)
 			numEspacios++;	
 		}
 	}*/
-	//printf("Num espacios: %d\n",numEspacios);
+	//Se comprueba si la peticion esta bien formada
+	int numTokens = 0;
+	token = strtok(auxLinea," ");
+	while (token != NULL){
+		//printf("Token: %s\n",token);
+		numTokens++;
+		token = strtok(NULL," ");
+	}
+	//printf("Numero de tokens: %d\n",numTokens);
+	
 	token = strtok(lineaSolicitud," ");
-	/*if (numEspacios != 2){
-		printf("Num espacios incorrectos\n");
+
+	if (numTokens != 3){
+		//printf("Num tokens incorrectos\n");
 		isBadRequest = 1;
-	}*/
+	}
 	
 	else if (strcmp(token,"GET") == 0 || strcmp(token,"POST") == 0){
 		//printf("Token: %s\n",token);
@@ -285,6 +296,19 @@ void process_web_request(int descriptorFichero)
 		token = strtok(NULL," ");
 	}
 	
+	//Se comprueba el valor de la cookie
+
+	if (lineaCookie != NULL){
+		printf("Linea cookie: %s\n",lineaCookie);
+		token = strtok(lineaCookie," ");
+		//printf("Token cookie: %s\n",token);
+		token = strtok(NULL," ");
+		//printf("Token cookie: %s\n",token);
+		token = strtok(token,"=");
+		token = strtok(NULL,"=");
+		//printf("Token cookie: %s\n",token);
+		valorCookie = atoi(token);
+	}
 	//printf("La conexion es: %s\n",connection);
 	
 	if (directorio != NULL){
@@ -404,11 +428,11 @@ void process_web_request(int descriptorFichero)
 		char fechayHora[50];
 		char caducidad[50];
 		int minutos;
-		//int maxAge;
 		time_t tiempo;
+		int maxAge = 120;
 		//time_t comienzo,final;
 		
-		char * stringDate = "Fri Mar 22 22:26:02 2019";
+		char * stringDate = "Sat, 23 Mar 2019 20:00:00 GMT";
 
 		//
 		//	En caso de que el fichero sea soportado, exista, etc. se envia el fichero con la cabecera
@@ -419,37 +443,26 @@ void process_web_request(int descriptorFichero)
 		if ((strcmp(recurso,"notFound.html") != 0) && (strcmp(recurso,"forbidden.html") != 0) && (strcmp(recurso,"badRequest.html") != 0)){			
 			setDate();
 			strftime(fechayHora,50,"%c",timeInfo);
-			printf("Entra a devolver 200 OK\n");
-			printf("strcmp(recurso,notFound.html): %d\n",strcmp(recurso,"notFound.html"));
+			//printf("Entra a devolver 200 OK\n");
 			//printf("El valor de la cookie es: %d\n",cookieCounter);
-			if (lineaCookie == NULL){
+			if (valorCookie == 0){
 				valorCookie = 1;
 				//firstRequest = 1;
 				printf("Se crea la cookie\n");
+				
 				tiempo = time(NULL);
 				timeCookie = localtime(&tiempo);
 				timeCookie->tm_min +=2;
-				//maxAge = 120;
-				isCookieCreada = 1;
-				printf("timeCookie-min: %d\n",timeCookie->tm_min);
-				minutos = timeCookie->tm_min;
+				//printf("timeCookie-min: %d\n",timeCookie->tm_min);
+				//minutos = timeCookie->tm_min;
 				strftime(caducidad,50,"%c",timeCookie);
 
 			} else {
-				token = strtok(lineaCookie," ");
-				printf("Token cookie: %s\n",token);
-				token = strtok(NULL," ");
-				printf("Token cookie: %s\n",token);
-			
-				token = strtok(token,"=");
-				token = strtok(NULL,"=");
-				printf("Token cookie: %s\n",token);
-				valorCookie = atoi(token);
-				printf("El valor de la cookie es: %d\n",valorCookie);
+				//printf("El valor de la cookie es: %d\n",valorCookie);
 				valorCookie++;
 			}
 			//if (isCookieCreada){
-				if (timeInfo->tm_min >= minutos){
+				/*if (timeInfo->tm_min >= minutos){
 					printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,minutos);
 					printf("La cookie ha expirado\n");
 					printf("Se crea la cookie\n");
@@ -461,18 +474,13 @@ void process_web_request(int descriptorFichero)
 					minutos = timeCookie->tm_min;
 					printf("timeCookie-min: %d\n",timeCookie->tm_min);
 					strftime(caducidad,50,"%c",timeCookie);
-				}
+				}*/
 			//}
-			//long int segundos = time(NULL)-comienzo;
-			//printf("Numero de segundos transcurridos es : %ld\n",segundos);
-			//maxAge -= segundos - (segundos-1);
-			//printf("MaxAge: %d\n",maxAge);
-			//maxAge -= time(NULL);
+			
 			//Se crean las cabeceras de la respuesta
-			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter=%d; Expires= %s; Path=%s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,valorCookie,caducidad,path);
-			/*if (cookieCounter < 10){
-				cookieCounter++;
-			}*/
+			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter=%d; Expires=%s; Path=%s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,valorCookie,stringDate,path);
+			
+
 		
 		}
 		else if (strcmp(recurso,"notFound.html") == 0){
