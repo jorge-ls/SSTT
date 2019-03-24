@@ -151,11 +151,10 @@ void process_web_request(int descriptorFichero)
 	struct timeval tv;
 	int retval;
 	int peticion = 1;
-	int valorCookie = 0;
 	int firstRequest;
 	char * lineaCookie;
 	char * connection;
-	int isCookieCreada;
+	int valorCookie = 0;
 	char * path = "/";
 	 
 	//Se inicializa el conjunto de sockets de lectura 
@@ -206,6 +205,7 @@ void process_web_request(int descriptorFichero)
 	DIR * dir;
 	int isBadRequest = 0;
 	char * tipoFichero;
+	
 
 	//printf("Comprobacion de errores de lectura\n");
 	
@@ -309,6 +309,9 @@ void process_web_request(int descriptorFichero)
 		//printf("Token cookie: %s\n",token);
 		valorCookie = atoi(token);
 	}
+	else {
+		valorCookie = 0;
+	}
 	//printf("La conexion es: %s\n",connection);
 	
 	if (directorio != NULL){
@@ -359,13 +362,11 @@ void process_web_request(int descriptorFichero)
 	
 	
 	if (isBadRequest){
-		//printf("Entra badRequest\n");
 		recurso = buscarRecurso(dir,"badRequest.html");
 		tipoFichero = "text/html";
 	}
 	else if (strstr(directorio,"..") != NULL){
 		printf("Error: No se tienen permisos para acceder al recurso\n");
-		//debug(PROHIBIDO,"403 Forbidden","No se tienen permisos para acceder al recurso solicitado",descriptorFichero);
 		recurso = buscarRecurso(dir,"forbidden.html");
 		printf("Recurso asignado: %s\n",recurso);
 		tipoFichero = "text/html";
@@ -377,11 +378,8 @@ void process_web_request(int descriptorFichero)
 		tipoFichero = "text/html";
 	}
 	else if (strcmp(directorio,"/") == 0){
-		//printf("Entra a buscar fichero index.html\n");
 		recurso = buscarRecurso(dir,"index.html");
 		tipoFichero = "text/html";
-		
-		//printf("El recurso encontrado es: %s\n",recurso);
 	}
 	
 	else {
@@ -399,7 +397,6 @@ void process_web_request(int descriptorFichero)
 			printf("La extension del fichero solicitado no esta soportada\n");
 		}
 		recurso = buscarRecurso(dir,recursoSolicitado);
-		//printf("El recurso solicitado es: %s\n",recurso);
 		
 	}
 	//
@@ -412,27 +409,17 @@ void process_web_request(int descriptorFichero)
 		printf("No se ha encontrado el recurso solicitado\n");
 		//debug(NOENCONTRADO,"404 Not Found","No se ha encontrado el recurso solicitado",descriptorFichero);
 		recurso = buscarRecurso(dir,"notFound.html");
-		//printf("Recurso asignado: %s\n",recurso);
 		tipoFichero = "text/html";
 	}
 		
 		fseek(fich,0L,SEEK_SET);
 		int pos = ftell(fich);
 		struct tm * timeCookie;
-		//printf("timeCookie-min: %d\n",timeInfo->tm_min);
-		//clock_t comienzo;
-		//printf("TimeCookie-min: %d\n",timeCookie->tm_min);
-		//printf("TimeInfo-min: %d\n",timeInfo->tm_min);
 		char cabecera[100];
 		char * server = "UbuntuServer/16.04"; 
 		char fechayHora[50];
-		char caducidad[50];
-		int minutos;
 		time_t tiempo;
-		int maxAge = 120;
-		//time_t comienzo,final;
-		
-		char * stringDate = "Sat, 23 Mar 2019 20:00:00 GMT";
+		int maxAge = 60;
 
 		//
 		//	En caso de que el fichero sea soportado, exista, etc. se envia el fichero con la cabecera
@@ -443,46 +430,19 @@ void process_web_request(int descriptorFichero)
 		if ((strcmp(recurso,"notFound.html") != 0) && (strcmp(recurso,"forbidden.html") != 0) && (strcmp(recurso,"badRequest.html") != 0)){			
 			setDate();
 			strftime(fechayHora,50,"%c",timeInfo);
-			//printf("Entra a devolver 200 OK\n");
-			//printf("El valor de la cookie es: %d\n",cookieCounter);
 			if (valorCookie == 0){
 				valorCookie = 1;
-				//firstRequest = 1;
 				printf("Se crea la cookie\n");
-				
-				tiempo = time(NULL);
-				timeCookie = localtime(&tiempo);
-				timeCookie->tm_min +=2;
-				//printf("timeCookie-min: %d\n",timeCookie->tm_min);
-				//minutos = timeCookie->tm_min;
-				strftime(caducidad,50,"%c",timeCookie);
 
 			} else {
 				//printf("El valor de la cookie es: %d\n",valorCookie);
 				valorCookie++;
 			}
-			//if (isCookieCreada){
-				/*if (timeInfo->tm_min >= minutos){
-					printf("TimeInfo: %d >= timeCookie: %d\n",timeInfo->tm_min,minutos);
-					printf("La cookie ha expirado\n");
-					printf("Se crea la cookie\n");
-					//comienzo = time(NULL);
-					tiempo = time(NULL);
-					timeCookie = localtime(&tiempo);
-					timeCookie->tm_min +=2;
-					valorCookie = 1;
-					minutos = timeCookie->tm_min;
-					printf("timeCookie-min: %d\n",timeCookie->tm_min);
-					strftime(caducidad,50,"%c",timeCookie);
-				}*/
-			//}
 			
 			//Se crean las cabeceras de la respuesta
-			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter=%d; Expires=%s; Path=%s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,valorCookie,stringDate,path);
+			sprintf(cabecera,"HTTP/1.1 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: %ld\r\nConnection: %s\r\nContent-Type: %s\r\nSet-Cookie: counter=%d; Max-Age=%d; Path=%s\r\n\r\n",fechayHora,server,bytesFichero,connection,tipoFichero,valorCookie,maxAge,path);
 			
-
-		
-		}
+	}
 		else if (strcmp(recurso,"notFound.html") == 0){
 			setDate();
 			strftime(fechayHora,50,"%c",timeInfo);
