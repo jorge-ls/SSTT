@@ -230,13 +230,6 @@ void process_web_request(int descriptorFichero)
 	
 	
 	
-	/*int numEspacios = 0;
-	for (int i=0;lineaSolicitud[i] != '\0';i++){
-		if (lineaSolicitud[i] == ' '){
-			printf("¡Espacio blanco!\n");
-			numEspacios++;	
-		}
-	}*/
 	//Se comprueba si la peticion esta bien formada
 	int numTokens = 0;
 	token = strtok(auxLinea," ");
@@ -315,15 +308,15 @@ void process_web_request(int descriptorFichero)
 	//printf("La conexion es: %s\n",connection);
 	
 	if (directorio != NULL){
-		reti = regcomp(&regex,"^\\/(([a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
+		reti = regcomp(&regex,"^\\/(([\\.a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
 		if( reti ){ 
 			fprintf(stderr, "Could not compile regex\n"); 
 			exit(1); 
 		}
 		reti = regexec(&regex,directorio, 0, NULL, 0);  
 		if( reti == 0 ){
-    			//puts("Match");                               	    
-			//printf("La ruta introducida es válida\n");
+    			puts("Match");                               	    
+			printf("La ruta introducida es válida\n");
 		}
 		else if( reti == REG_NOMATCH ){
     			puts("No match");
@@ -419,7 +412,7 @@ void process_web_request(int descriptorFichero)
 		char * server = "UbuntuServer/16.04"; 
 		char fechayHora[50];
 		time_t tiempo;
-		int maxAge = 60;
+		int maxAge = 120;
 
 		//
 		//	En caso de que el fichero sea soportado, exista, etc. se envia el fichero con la cabecera
