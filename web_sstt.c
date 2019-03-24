@@ -28,6 +28,8 @@ int cookieCounter = 0;
 struct tm * timeInfo;
 
 
+
+
 struct {
 	char *ext;
 	char *filetype;
@@ -150,6 +152,8 @@ void process_web_request(int descriptorFichero)
 	fd_set readfds;
 	struct timeval tv;
 	int retval;
+	regex_t regex; //Estructura regex
+	char msgbuf[100];
 	int peticion = 1;
 	int firstRequest;
 	char * lineaCookie;
@@ -191,9 +195,8 @@ void process_web_request(int descriptorFichero)
 	//
 	// Comprobación de errores de lectura
 	//
-	regex_t regex; //Estructura regex
-	int reti;
-	char msgbuf[100];
+	
+	
 	char * linea;
 	char * lineaSolicitud;
 	char * lineaConection;
@@ -205,8 +208,7 @@ void process_web_request(int descriptorFichero)
 	DIR * dir;
 	int isBadRequest = 0;
 	char * tipoFichero;
-	
-
+	int reti;
 	//printf("Comprobacion de errores de lectura\n");
 	
 	linea = strtok(requestBuffer,delim);
@@ -215,6 +217,7 @@ void process_web_request(int descriptorFichero)
 	//printf("Linea: %s\n",linea);
 	
 	while (linea!=NULL){
+		
 		if (strstr(linea,"Connection:") != NULL){
 			lineaConection = strdup(linea);
 			//printf("Linea connection: %s\n",lineaConection);
@@ -241,7 +244,6 @@ void process_web_request(int descriptorFichero)
 	//printf("Numero de tokens: %d\n",numTokens);
 	
 	token = strtok(lineaSolicitud," ");
-
 	if (numTokens != 3){
 		//printf("Num tokens incorrectos\n");
 		isBadRequest = 1;
@@ -273,33 +275,31 @@ void process_web_request(int descriptorFichero)
 	}
 	
 	
-	//printf("El recurso solicitado es %s\n",auxToken);
+	
 
 	//Se comprueba si la conexion es persistente o no
 	token = strtok(lineaConection," ");
-	while (token != NULL){
-		if (strcmp(token,"keep-alive") == 0){
-			//printf("Conexion keep-alive\n");
-			connection = token;
-		}
-		else if (strcmp(token,"close") == 0){
-			//printf("Conexion no keep-alive\n");
-			connection = token;
-		}
-		token = strtok(NULL," ");
+	token = strtok(NULL," ");
+	
+	if (strcmp(token,"keep-alive") == 0){
+		connection = token;
 	}
+	else if (strcmp(token,"close") == 0){
+		connection = token;
+	}
+	
 	
 	//Se comprueba el valor de la cookie
 
 	if (lineaCookie != NULL){
 		printf("Linea cookie: %s\n",lineaCookie);
 		token = strtok(lineaCookie," ");
-		//printf("Token cookie: %s\n",token);
+		
 		token = strtok(NULL," ");
-		//printf("Token cookie: %s\n",token);
+		
 		token = strtok(token,"=");
 		token = strtok(NULL,"=");
-		//printf("Token cookie: %s\n",token);
+		
 		valorCookie = atoi(token);
 	}
 	else {
