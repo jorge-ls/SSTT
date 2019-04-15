@@ -140,6 +140,42 @@ void setDate(){
 
 }
 
+int checkExpr(char * expReg,char * cadena){
+	int reti;
+	int badRequest = 0;
+	regex_t regex; //Estructura regex
+	char msgbuf[100];
+		
+	reti = regcomp(&regex,expReg,REG_EXTENDED);
+		
+	if( reti ){ 
+		fprintf(stderr, "Could not compile regex\n"); 
+		exit(1); 
+	}
+	reti = regexec(&regex,cadena, 0, NULL, 0);  
+	if( reti == 0 ){
+    		puts("Match");                               	    
+		printf("La expresion introducida es válida\n");
+	}
+	else if( reti == REG_NOMATCH ){
+    		puts("No match");
+		printf("Error:La expresion introducida no es válida\n"); 
+		badRequest = 1;                              
+	}
+	else if (reti == REG_BADPAT){
+		puts("Invalid");
+		printf("Error: La expresion regular es invalida\n");
+
+	}
+	else{                                                   
+    		regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+    		fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+    		exit(1);
+	}
+	return badRequest;
+
+}
+
 
 void process_web_request(int descriptorFichero)
 {
@@ -189,13 +225,12 @@ void process_web_request(int descriptorFichero)
 	
 			for (int i=0;i<bytesleidos;i++){
 				if (requestBuffer[i] == '\r' || requestBuffer[i] == '\n'){
-					requestBuffer[i] = '*';
+					requestBuffer[i] = '&';
 				}
 			} 
 	//
 	// Comprobación de errores de lectura
 	//
-	
 	
 	char * linea;
 	char * lineaSolicitud;
@@ -203,37 +238,40 @@ void process_web_request(int descriptorFichero)
 	char * token;
 	char * auxToken;
 	char * directorio;
-	const char delim[] = "**"; 
+	const char delim[] = "&&"; 
 	char * recurso;
 	DIR * dir;
 	int isBadRequest = 0;
 	char * tipoFichero;
-	int reti;
 	//printf("Comprobacion de errores de lectura\n");
-	
+	int isMatch;
 	linea = strtok(requestBuffer,delim);
 	lineaSolicitud = strdup(linea);
 	char * auxLinea = strdup(linea);
-	//printf("Linea: %s\n",linea);
+	printf("Linea: %s\n",linea);
 	
+	//Se analizan las lineas de cabecera de la peticion
 	while (linea!=NULL){
-		
-		if (strstr(linea,"Connection:") != NULL){
+		linea = strtok(NULL,delim);
+		if (linea != NULL && strstr(linea,"Connection:") != NULL){
 			lineaConection = strdup(linea);
 			//printf("Linea connection: %s\n",lineaConection);
 		}
-		else if (strstr(linea,"Cookie:") != NULL){
+		else if (linea != NULL && strstr(linea,"Cookie:") != NULL){
 			lineaCookie = strdup(linea);
 		}
-		linea = strtok(NULL,delim);
-		//printf("Linea: %s\n",linea);
+		if (linea != NULL){
+			printf("Linea: %s\n",linea);
+			isMatch = checkExpr("[a-zA-Z_-]:\\s{1}[a-zA-Z0-9;,.\\*_=/-]",linea);
+			if (isMatch == 1){
+				isBadRequest = isMatch;
+			}
+			
+		}
+		
 	}
 
-	//Lectura de la linea de solicitud
-	
-	
-	
-	//Se comprueba si la peticion esta bien formada
+	//Se analiza la linea de solicitud
 	int numTokens = 0;
 	token = strtok(auxLinea," ");
 	while (token != NULL){
@@ -273,8 +311,23 @@ void process_web_request(int descriptorFichero)
 		printf("Error: El mensaje de solicitud debe ser un GET o un POST\n");
 		isBadRequest = 1;
 	}
+
+	if (directorio != NULL){
+		printf("Directorio: %s\n",directorio);
+		isMatch = checkExpr("^\\/(([\\.a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",directorio);
+		if (isMatch == 1){
+			isBadRequest = isMatch;
+		}
+	}
+
 	
 	
+	/*printf("****Cadena de prueba****\n");
+	char * prueba = "[a-zA-Z_-]:\\s{1}[a-zA-Z0-9;,.\\*_=/-]";
+	char * prueba1 = "[a-zA-Z_-]:";
+	char * cadena = "Connection: keep-a live/;.,*";
+	printf("Analizando cadena: %s\n",cadena);
+	checkExpr(prueba,cadena);*/ 
 	
 
 	//Se comprueba si la conexion es persistente o no
@@ -287,12 +340,15 @@ void process_web_request(int descriptorFichero)
 	else if (strcmp(token,"close") == 0){
 		connection = token;
 	}
+	else if (token == NULL){
+		connection = "keep-alive";
+	}
 	
-	
+	//printf("La conexion es: %s\n",connection);
 	//Se comprueba el valor de la cookie
 
 	if (lineaCookie != NULL){
-		printf("Linea cookie: %s\n",lineaCookie);
+		//printf("Linea cookie: %s\n",lineaCookie);
 		token = strtok(lineaCookie," ");
 		
 		token = strtok(NULL," ");
@@ -305,39 +361,9 @@ void process_web_request(int descriptorFichero)
 	else {
 		valorCookie = 0;
 	}
-	//printf("La conexion es: %s\n",connection);
+	//printf("El valor de la cookie es: %d\n",valorCookie);
 	
-	if (directorio != NULL){
-		reti = regcomp(&regex,"^\\/(([\\.a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",REG_EXTENDED);
-		if( reti ){ 
-			fprintf(stderr, "Could not compile regex\n"); 
-			exit(1); 
-		}
-		reti = regexec(&regex,directorio, 0, NULL, 0);  
-		if( reti == 0 ){
-    			puts("Match");                               	    
-			printf("La ruta introducida es válida\n");
-		}
-		else if( reti == REG_NOMATCH ){
-    			puts("No match");
-			printf("Error:La ruta introducida no es válida\n"); 
-			isBadRequest = 1;                              
-		}
-		else if (reti == REG_BADPAT){
-			puts("Invalid");
-			printf("Error: La expresion regular es invalida\n");
-
-		}
-		else{                                                   
-    			regerror(reti, &regex, msgbuf, sizeof(msgbuf));
-    			fprintf(stderr, "Regex match failed: %s\n", msgbuf);
-    			exit(1);
-		}
-
-	}
 	
-		
-		
 	//
 	// Si la lectura tiene datos válidos terminar el buffer con un \0
 	//
@@ -353,7 +379,8 @@ void process_web_request(int descriptorFichero)
 	//	del sistema
 	//
 	
-	
+	printf("Comprobacion de condiciones\n");
+
 	if (isBadRequest){
 		recurso = buscarRecurso(dir,"badRequest.html");
 		tipoFichero = "text/html";
