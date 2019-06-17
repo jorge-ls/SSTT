@@ -154,8 +154,8 @@ int checkExpr(char * expReg,char * cadena){
 	}
 	reti = regexec(&regex,cadena, 0, NULL, 0);  
 	if( reti == 0 ){
-    		puts("Match");                               	    
-		printf("La expresion introducida es válida\n");
+    		//puts("Match");                               	    
+		//printf("La expresion introducida es válida\n");
 	}
 	else if( reti == REG_NOMATCH ){
     		puts("No match");
@@ -188,8 +188,6 @@ void process_web_request(int descriptorFichero)
 	fd_set readfds;
 	struct timeval tv;
 	int retval;
-	regex_t regex; //Estructura regex
-	char msgbuf[100];
 	int peticion = 1;
 	int firstRequest;
 	char * lineaCookie;
@@ -248,7 +246,7 @@ void process_web_request(int descriptorFichero)
 	linea = strtok(requestBuffer,delim);
 	lineaSolicitud = strdup(linea);
 	char * auxLinea = strdup(linea);
-	printf("Linea: %s\n",linea);
+	//printf("Linea: %s\n",linea);
 	
 	//Se analizan las lineas de cabecera de la peticion
 	while (linea!=NULL){
@@ -261,7 +259,7 @@ void process_web_request(int descriptorFichero)
 			lineaCookie = strdup(linea);
 		}
 		if (linea != NULL){
-			printf("Linea: %s\n",linea);
+			//printf("Linea: %s\n",linea);
 			isMatch = checkExpr("[a-zA-Z_-]:\\s{1}[a-zA-Z0-9;,.\\*_=/-]",linea);
 			if (isMatch == 1){
 				isBadRequest = isMatch;
@@ -313,22 +311,12 @@ void process_web_request(int descriptorFichero)
 	}
 
 	if (directorio != NULL){
-		printf("Directorio: %s\n",directorio);
 		isMatch = checkExpr("^\\/(([\\.a-zA-Z_-]*\\/?)+\\.[a-z]{3,4})?$",directorio);
 		if (isMatch == 1){
 			isBadRequest = isMatch;
 		}
 	}
 
-	
-	
-	/*printf("****Cadena de prueba****\n");
-	char * prueba = "[a-zA-Z_-]:\\s{1}[a-zA-Z0-9;,.\\*_=/-]";
-	char * prueba1 = "[a-zA-Z_-]:";
-	char * cadena = "Connection: keep-a live/;.,*";
-	printf("Analizando cadena: %s\n",cadena);
-	checkExpr(prueba,cadena);*/ 
-	
 
 	//Se comprueba si la conexion es persistente o no
 	token = strtok(lineaConection," ");
@@ -379,7 +367,7 @@ void process_web_request(int descriptorFichero)
 	//	del sistema
 	//
 	
-	printf("Comprobacion de condiciones\n");
+	//printf("Comprobacion de condiciones\n");
 
 	if (isBadRequest){
 		recurso = buscarRecurso(dir,"badRequest.html");
@@ -425,8 +413,8 @@ void process_web_request(int descriptorFichero)
 	//
 
 	if (recurso == NULL){
-		printf("Entra notFound\n");
-		printf("No se ha encontrado el recurso solicitado\n");
+		//printf("Entra notFound\n");
+		//printf("No se ha encontrado el recurso solicitado\n");
 		//debug(NOENCONTRADO,"404 Not Found","No se ha encontrado el recurso solicitado",descriptorFichero);
 		recurso = buscarRecurso(dir,"notFound.html");
 		tipoFichero = "text/html";
